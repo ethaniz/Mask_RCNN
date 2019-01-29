@@ -58,3 +58,8 @@ venv/
 ENV/
 
 datasets
+*.zip
+.DS_Store
+*.jpg
+*.h5
+.DS_Store
