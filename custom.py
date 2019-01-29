@@ -61,7 +61,7 @@ class CustomConfig(Config):
     IMAGES_PER_GPU = 2
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 1  # Background + toy
+    NUM_CLASSES = 1 + 2 # Background + toy
 
     # Number of training steps per epoch
     STEPS_PER_EPOCH = 100
@@ -82,7 +82,8 @@ class CustomDataset(utils.Dataset):
         subset: Subset to load: train or val
         """
         # Add classes. We have only one class to add.
-        self.add_class("score_card", 1, "score_card")
+        self.add_class("score_card", 1, "score")
+        self.add_class("score_card", 2, "time")
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
@@ -118,6 +119,7 @@ class CustomDataset(utils.Dataset):
             # the outline of each object instance. There are stores in the
             # shape_attributes (see json format above)
             polygons = [r['shape_attributes'] for r in a['regions'].values()]
+            cards = [r['region_attributes'] for r in a['regions'].values()]
 
             # load_mask() needs the image size to convert polygons to masks.
             # Unfortunately, VIA doesn't include it in JSON, so we must read
@@ -131,7 +133,8 @@ class CustomDataset(utils.Dataset):
                 image_id=a['filename'],  # use file name as a unique image id
                 path=image_path,
                 width=width, height=height,
-                polygons=polygons)
+                polygons=polygons,
+                cards=cards)
 
     def load_mask(self, image_id):
         """Generate instance masks for an image.
@@ -155,9 +158,16 @@ class CustomDataset(utils.Dataset):
             rr, cc = skimage.draw.polygon(p['all_points_y'], p['all_points_x'])
             mask[rr, cc, i] = 1
 
+        names = []
+        for a in info['cards']:
+            names.append(a["name"])
+
+        class_ids = np.array([self.class_names.index(n) for n in names])
+
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID only, we return an array of 1s
-        return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
+        #return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
+        return mask.astype(np.bool), class_ids.astype(np.int32)
 
     def image_reference(self, image_id):
         """Return the path of the image."""
@@ -347,9 +357,7 @@ if __name__ == '__main__':
             "mrcnn_class_logits", "mrcnn_bbox_fc",
             "mrcnn_bbox", "mrcnn_mask"])
     else:
-        model.load_weights(weights_path, by_name=True, exclude=[
-            "mrcnn_class_logits", "mrcnn_bbox_fc",
-            "mrcnn_bbox", "mrcnn_mask"])
+        model.load_weights(weights_path, by_name=True)
 
     # Train or evaluate
     if args.command == "train":
